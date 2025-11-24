@@ -2,7 +2,6 @@ package com.w.entity;
 
 import com.w.enums.BookType;
 
-import java.util.HashSet;
 import java.util.Objects;
 
 public class Book {

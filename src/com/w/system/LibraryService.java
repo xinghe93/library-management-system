@@ -17,11 +17,13 @@ public class LibraryService {
     }
 
     // 1. 添加图书（馆藏编号唯一）
-    public String addBook(String isbn, String collectionNo, String title, String author, BookType type, String publishDate) {
+    public String addBook(String isbn, String collectionNo, String title,
+                          String author, BookType type, String publishDate) {
         Book book = new Book(isbn, collectionNo, title, author, type, publishDate);
         try {
             boolean success = libraryData.addBook(book);
-            return success ? "✅ 图书添加成功！\n" : "❌ 添加失败：馆藏编号「" + collectionNo + "」已存在，无法重复添加";
+            return success ? "✅ 图书添加成功！\n" :
+                    "❌ 添加失败：馆藏编号「" + collectionNo + "」已存在，无法重复添加";
         } catch (Exception e) {
             return "❌ 添加失败：馆藏编号「" + collectionNo + "」已存在，无法重复添加";
         }
@@ -81,11 +83,13 @@ public class LibraryService {
         if (!book.isAvailable()) {
             // 检查是否已预约
             if (libraryData.isReserved(collectionNo, userId)) {
-                return "✅ 用户「" + user.getName() + "」已预约图书「" + book.getTitle() + "」，请耐心等待！";
+                return "✅ 用户「" + user.getName() + "」已预约图书「" +
+                        book.getTitle() + "」，请耐心等待！";
             }
             // 新增预约
             libraryData.addReservation(new Reservation(user, book));
-            return "❌ 馆藏编号「" + collectionNo + "」的图书已借出，预约成功！当前排队位置：" + libraryData.getAllBorrowRecords().size();
+            return "❌ 馆藏编号「" + collectionNo + "」的图书已借出，预约成功！当前排队位置：" +
+                    libraryData.getAllBorrowRecords().size();
         }
         // 执行借阅
         book.setAvailable(false);
@@ -207,11 +211,11 @@ public class LibraryService {
     public String sortBooksByAuthor() {
         return sortBooks("作者", Comparator.comparing(Book::getAuthor));
     }
-    
+
     public String sortBooksByTitle() {
         return sortBooks("书名", Comparator.comparing(Book::getTitle));
     }
-    
+
     public String sortBooksByIsbn() {
         return sortBooks("ISBN", Comparator.comparing(Book::getIsbn));
     }
