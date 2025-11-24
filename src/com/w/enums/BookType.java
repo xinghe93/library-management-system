@@ -1,8 +1,8 @@
 package com.w.enums;
 
 public enum BookType {
-    FICTION("小说"),
     TECHNOLOGY("技术"),
+    FICTION("小说"),
     SCIENCE("科学"),
     HISTORY("历史"),
     ART("艺术"),
