@@ -52,18 +52,13 @@ public class LibraryService {
         return true;
     }
     // 添加实体书（同时添加图书信息）
-    public boolean addBookItem(String collectionNo, Book book) {
-        // 检查馆藏编号是否已存在
-        if (isBookItemExists(collectionNo)) {
-            return false;
-        }
+    public void addBookItem(String collectionNo, Book book) {
         // 先添加图书信息
         addBook(book);
         // 再添加实体书
         BookItem bookItem = new BookItem(collectionNo, book.getIsbn());
         libraryData.getBookItemsByCollectionNo().put(collectionNo, bookItem);
         libraryData.getCollectionNos().add(collectionNo);
-        return true;
     }
     // 添加用户
     public boolean addUser(User user) {
@@ -132,45 +127,6 @@ public class LibraryService {
         libraryData.getBorrowRecords().add(new BorrowRecords(collectionNo, userId));
         return true;
     }
-
-    /**
-     * 借阅图书（增强版，支持自动预约）
-     * @param collectionNo 馆藏编号
-     * @param userId 用户ID
-     * @return 借阅结果：0-借阅成功，1-图书已被借出并已自动预约，2-图书已被借出但预约失败，3-借阅失败
-     */
-    public int borrowBookWithAutoReserve(String collectionNo, String userId) {
-        // 检查用户是否存在
-        if (!isUserExists(userId)) {
-            return 3; // 借阅失败
-        }
-        
-        BookItem bookItem = libraryData.getBookItemsByCollectionNo().get(collectionNo);
-        
-        // 检查图书是否存在
-        if (bookItem == null) {
-            return 3; // 借阅失败
-        }
-        
-        // 检查图书是否可借阅
-        if (!bookItem.isAvailable()) {
-            // 图书已被借出，尝试自动添加到预约队列
-            boolean reserved = reserveBook(collectionNo, userId);
-            if (reserved) {
-                return 1; // 图书已被借出并已自动预约
-            } else {
-                return 2; // 图书已被借出但预约失败
-            }
-        }
-        
-        // 设置为已借出
-        bookItem.setAvailable(false);
-        
-        // 添加借阅记录
-        libraryData.getBorrowRecords().add(new BorrowRecords(collectionNo, userId));
-        
-        return 0; // 借阅成功
-    }
     // 归还图书
     public String returnBook(String collectionNo) {
         BookItem bookItem = libraryData.getBookItemsByCollectionNo().get(collectionNo);
@@ -187,7 +143,6 @@ public class LibraryService {
             // 图书未被借阅
             return ""; // 归还失败
         }
-        String userId = borrowRecord.getBorrowerId();
         // 移除借阅记录
         libraryData.getBorrowRecords().removeIf(
             record -> record.getCollectionNo().equals(collectionNo)
