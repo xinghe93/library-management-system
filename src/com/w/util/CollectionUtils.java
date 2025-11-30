@@ -3,9 +3,7 @@ package com.w.util;
 import java.util.Collection;
 import java.util.function.Predicate;
 
-// 泛型工具类：实现了与具体类型无关的通用功能，提高代码复用性
 public class CollectionUtils {
-
     /**
      * 泛型方法：查找集合中第一个满足条件的元素
      *

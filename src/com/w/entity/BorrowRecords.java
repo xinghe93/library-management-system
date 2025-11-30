@@ -1,26 +1,26 @@
 package com.w.entity;
 
 public class BorrowRecords {
-    private User borrower;
-    private Book book;
+    private String collectionNo;
+    private String borrowerId;
 
-    public BorrowRecords(User borrower, Book book) {
-        this.borrower = borrower;
-        this.book = book;
+    public BorrowRecords(String collectionNo, String borrowerId) {
+        this.collectionNo = collectionNo;
+        this.borrowerId = borrowerId;
     }
 
-    public User getBorrower() {
-        return borrower;
+    public String getCollectionNo() {
+        return collectionNo;
     }
-    public Book getBook() {
-        return book;
+    public String getBorrowerId() {
+        return borrowerId;
     }
 
     @Override
     public String toString() {
         return String.format(
-                "借阅人: %s\n图书: %s",
-                borrower, book
+                "馆藏编号: %s\n借阅人ID: %s",
+                collectionNo, borrowerId
         );
     }
 }

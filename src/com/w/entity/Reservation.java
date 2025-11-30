@@ -1,26 +1,26 @@
 package com.w.entity;
 
 public class Reservation {
-    private User user;
-    private Book book;
+    private String collectionNo;
+    private String userId;
 
-    public Reservation(User user, Book book) {
-        this.user = user;
-        this.book = book;
+    public Reservation(String collectionNo, String userId) {
+        this.collectionNo = collectionNo;
+        this.userId = userId;
     }
 
-    public User getUser() {
-        return user;
+    public String getCollectionNo() {
+        return collectionNo;
     }
-    public Book getBook() {
-        return book;
+    public String getUserId() {
+        return userId;
     }
 
     @Override
     public String toString() {
         return String.format(
-                "用户: %s\n图书: %s",
-                user, book
+                "馆藏编号: %s\n预约人ID: %s",
+                collectionNo, userId
         );
     }
 }

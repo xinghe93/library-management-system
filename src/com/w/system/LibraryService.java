@@ -1,251 +1,334 @@
 package com.w.system;
 
-import com.w.entity.Book;
-import com.w.entity.User;
-import com.w.entity.BorrowRecords;
-import com.w.entity.Reservation;
 import com.w.enums.BookType;
+import com.w.entity.*;
 import com.w.util.CollectionUtils;
 
 import java.util.*;
 
 public class LibraryService {
     private final LibraryData libraryData;
-
     public LibraryService(LibraryData libraryData) {
         this.libraryData = libraryData;
     }
-
-    // 1. 添加图书（馆藏编号唯一）
-    public String addBook(String isbn, String collectionNo, String title,
-                          String author, BookType type, String publishDate) {
-        Book book = new Book(isbn, collectionNo, title, author, type, publishDate);
-        try {
-            boolean success = libraryData.addBook(book);
-            return success ? "✅ 图书添加成功！\n" :
-                    "❌ 添加失败：馆藏编号「" + collectionNo + "」已存在，无法重复添加";
-        } catch (Exception e) {
-            return "❌ 添加失败：馆藏编号「" + collectionNo + "」已存在，无法重复添加";
+    // 检查图书是否已存在（根据ISBN）
+    public boolean isBookExists(String isbn) {
+        return libraryData.getBooksByIsbn().containsKey(isbn);
+    }
+    // 检查用户是否已存在（根据用户ID）
+    public boolean isUserExists(String userId) {
+        return libraryData.getUsersById().containsKey(userId);
+    }
+    // 检查实体书是否已存在（根据馆藏编号）
+    public boolean isBookItemExists(String collectionNo) {
+        return libraryData.getCollectionNos().contains(collectionNo);
+    }
+    // 添加图书信息
+    public boolean addBook(Book book) {
+        // 检查图书是否已存在
+        if (isBookExists(book.getIsbn())) {
+            return false;
         }
+        libraryData.getBooksByIsbn().put(book.getIsbn(), book);
+        // 更新图书类型统计
+        BookType type = book.getType();
+        libraryData.getBookCountsByType().put(type, 
+            libraryData.getBookCountsByType().getOrDefault(type, 0) + 1);
+        return true;
+    }
+    // 直接添加实体书（不添加图书信息）
+    public boolean addBookItem(BookItem bookItem) {
+        // 检查馆藏编号是否已存在
+        if (isBookItemExists(bookItem.getCollectionNo())) {
+            return false;
+        }
+        // 检查对应的图书信息是否存在
+        if (!isBookExists(bookItem.getIsbn())) {
+            return false;
+        }
+        // 添加实体书
+        libraryData.getBookItemsByCollectionNo().put(bookItem.getCollectionNo(), bookItem);
+        libraryData.getCollectionNos().add(bookItem.getCollectionNo());
+        return true;
+    }
+    // 添加实体书（同时添加图书信息）
+    public boolean addBookItem(String collectionNo, Book book) {
+        // 检查馆藏编号是否已存在
+        if (isBookItemExists(collectionNo)) {
+            return false;
+        }
+        // 先添加图书信息
+        addBook(book);
+        // 再添加实体书
+        BookItem bookItem = new BookItem(collectionNo, book.getIsbn());
+        libraryData.getBookItemsByCollectionNo().put(collectionNo, bookItem);
+        libraryData.getCollectionNos().add(collectionNo);
+        return true;
+    }
+    // 添加用户
+    public boolean addUser(User user) {
+        // 检查用户是否已存在
+        if (isUserExists(user.getId())) {
+            return false;
+        }
+        libraryData.getUsersById().put(user.getId(), user);
+        return true;
+    }
+    // 根据ISBN查找图书
+    public Book findBookByIsbn(String isbn) {
+        return libraryData.getBooksByIsbn().get(isbn);
+    }
+    // 根据书名查找图书
+    public List<Book> findBooksByTitle(String title) {
+        return (List<Book>) CollectionUtils.filter(
+            libraryData.getBooksByIsbn().values(),
+            book -> book.getTitle().contains(title)
+        );
+    }
+    
+    // 根据作者查找图书
+    public List<Book> findBooksByAuthor(String author) {
+        return (List<Book>) CollectionUtils.filter(
+            libraryData.getBooksByIsbn().values(),
+            book -> book.getAuthor().contains(author)
+        );
+    }
+    // 获取指定ISBN图书的所有实体书及其状态
+    public List<BookItem> getBookItemsByIsbn(String isbn) {
+        return (List<BookItem>) CollectionUtils.filter(
+            libraryData.getBookItemsByCollectionNo().values(),
+            item -> item.getIsbn().equals(isbn)
+        );
+    }
+    // 借阅图书
+    public boolean borrowBook(String collectionNo, String userId) {
+        // 检查用户是否存在
+        if (!isUserExists(userId)) {
+            return false;
+        }
+        BookItem bookItem = libraryData.getBookItemsByCollectionNo().get(collectionNo);
+        // 棜查图书是否存在
+        if (bookItem == null) {
+            return false;
+        }
+        // 检查图书是否可借阅
+        if (!bookItem.isAvailable()) {
+            return false;
+        }
+        // 检查用户是否已经借阅了这本书
+        BorrowRecords borrowRecord = CollectionUtils.findFirst(
+            libraryData.getBorrowRecords(),
+            record -> record.getCollectionNo().equals(collectionNo) 
+                && record.getBorrowerId().equals(userId)
+        );
+        
+        if (borrowRecord != null) {
+            // 用户已经借阅了这本书
+            return false;
+        }
+        // 设置为已借出
+        bookItem.setAvailable(false);
+        // 添加借阅记录
+        libraryData.getBorrowRecords().add(new BorrowRecords(collectionNo, userId));
+        return true;
     }
 
-    // 2. 添加用户
-    public String addUser(String userId, String userName, String contact) {
-        // 校验用户ID是否重复
-        if (libraryData.isUserIdExists(userId)) {
-            return "❌ 错误：用户ID「" + userId + "」已存在，无法重复添加！";
+    /**
+     * 借阅图书（增强版，支持自动预约）
+     * @param collectionNo 馆藏编号
+     * @param userId 用户ID
+     * @return 借阅结果：0-借阅成功，1-图书已被借出并已自动预约，2-图书已被借出但预约失败，3-借阅失败
+     */
+    public int borrowBookWithAutoReserve(String collectionNo, String userId) {
+        // 检查用户是否存在
+        if (!isUserExists(userId)) {
+            return 3; // 借阅失败
         }
-        // 新增用户
-        User user = new User(userId, userName, contact);
-        libraryData.addUser(user);
-        return "✅ 用户添加成功！\n用户信息：" + user;
-    }
-
-    // 3. 搜索图书
-    public String searchBookByIsbn(String isbn) { // 通过ISBN搜索
-        List<Book> books = libraryData.getBooksByIsbn(isbn);
-        if (books.isEmpty()) {
-            return "未找到ISBN为「" + isbn + "」的图书";
+        
+        BookItem bookItem = libraryData.getBookItemsByCollectionNo().get(collectionNo);
+        
+        // 检查图书是否存在
+        if (bookItem == null) {
+            return 3; // 借阅失败
         }
-        StringBuilder sb = new StringBuilder("共有" + books.size() + "本书：\n");
-        for (Book book : books) {
-            sb.append(book.toString()).append("\n");
-        }
-        return sb.toString();
-    }
-
-    public String searchBookByTitle(String title) { // 通过书名搜索
-        List<Book> books = libraryData.searchBooksByTitle(title);
-        if (books.isEmpty()) {
-            return "未找到书名为「" + title + "」的图书";
-        }
-        return books.toString();
-    }
-
-    public String searchBookByAuthor(String author) { // 通过作者搜索
-        List<Book> books = libraryData.searchBooksByAuthor(author);
-        if (books.isEmpty()) {
-            return "未找到作者「" + author + "」的图书";
-        }
-        return books.toString();
-    }
-
-    // 4. 借阅图书
-    public String borrowBook(String userId, String collectionNo) {
-        User user = libraryData.getUserById(userId);
-        if (user == null) {
-            return "❌ 错误：用户ID「" + userId + "」不存在！";
-        }
-        Book book = libraryData.getBookByCollectionNo(collectionNo);
-        if (book == null) {
-            return "❌ 错误：馆藏编号「" + collectionNo + "」不存在！";
-        }
-        if (!book.isAvailable()) {
-            // 检查是否已预约
-            if (libraryData.isReserved(collectionNo, userId)) {
-                return "✅ 用户「" + user.getName() + "」已预约图书「" +
-                        book.getTitle() + "」，请耐心等待！";
+        
+        // 检查图书是否可借阅
+        if (!bookItem.isAvailable()) {
+            // 图书已被借出，尝试自动添加到预约队列
+            boolean reserved = reserveBook(collectionNo, userId);
+            if (reserved) {
+                return 1; // 图书已被借出并已自动预约
+            } else {
+                return 2; // 图书已被借出但预约失败
             }
-            // 新增预约
-            libraryData.addReservation(new Reservation(user, book));
-            return "❌ 馆藏编号「" + collectionNo + "」的图书已借出，预约成功！当前排队位置：" +
-                    libraryData.getAllBorrowRecords().size();
         }
-        // 执行借阅
-        book.setAvailable(false);
-        BorrowRecords record = new BorrowRecords(user, book);
-        libraryData.addBorrowRecord(record);
-        return "✅ 借阅成功！\n借阅信息：" + record;
+        
+        // 设置为已借出
+        bookItem.setAvailable(false);
+        
+        // 添加借阅记录
+        libraryData.getBorrowRecords().add(new BorrowRecords(collectionNo, userId));
+        
+        return 0; // 借阅成功
     }
-
-    // 5. 归还图书
+    // 归还图书
     public String returnBook(String collectionNo) {
-        Book book = libraryData.getBookByCollectionNo(collectionNo);
-        if (book == null) {
-            return "❌ 错误：馆藏编号「" + collectionNo + "」不存在！";
+        BookItem bookItem = libraryData.getBookItemsByCollectionNo().get(collectionNo);
+        // 检查图书是否存在
+        if (bookItem == null) {
+            return ""; // 归还失败
         }
-
-        if (book.isAvailable()) {
-            return "❌ 错误：该图书未被借出，无法归还！";
-        }
-
-        // 查找并移除对应的借阅记录
-        List<BorrowRecords> records = libraryData.getAllBorrowRecords();
-        BorrowRecords targetRecord = CollectionUtils.findFirst(records,
-                r -> r.getBook().getCollectionNo().equals(collectionNo));
-
-        if (targetRecord != null) {
-            records.remove(targetRecord);
-        }
-
-        // 检查是否有预约
-        Reservation reservation = libraryData.getFirstReservationByBook(book);
-        if (reservation != null) {
-            // 从预约列表中移除预约记录（直接操作原始列表）
-            libraryData.removeReservation(reservation);
-            // 为预约用户创建借阅记录
-            BorrowRecords newRecord = new BorrowRecords(reservation.getUser(), book);
-            libraryData.addBorrowRecord(newRecord);
-            book.setAvailable(false); // 设置图书为已借出状态
-            return String.format(
-                    "✅ 图书归还成功！\n已自动为预约用户「%s」完成借阅",
-                    reservation.getUser().getName()
-            );
-        }
-
-        book.setAvailable(true);
-        return "✅ 图书归还成功！";
-    }
-
-    // 6. 预约图书功能
-    public String reserveBook(String userId, String collectionNo) {
-        User user = libraryData.getUserById(userId);
-        if (user == null) {
-            return "❌ 错误：用户ID「" + userId + "」不存在！";
-        }
-
-        Book book = libraryData.getBookByCollectionNo(collectionNo);
-        if (book == null) {
-            return "❌ 错误：馆藏编号「" + collectionNo + "」不存在！";
-        }
-
-        if (book.isAvailable()) {
-            return "❌ 错误：该图书当前可借阅，无需预约";
-        }
-
-        return reserveBook(user, book);
-    }
-
-    private String reserveBook(User user, Book book) {
-        if (libraryData.isReserved(book.getCollectionNo(), user.getId())) {
-            return "✅ 用户「" + user.getName() + "」已预约图书「" + book.getTitle() + "」";
-        }
-
-        libraryData.addReservation(new Reservation(user, book));
-        return String.format(
-                "✅ 预约成功！当前排队位置：%d",
-                libraryData.getAllReservations().size()
+        // 查找当前借阅者
+        BorrowRecords borrowRecord = CollectionUtils.findFirst(
+            libraryData.getBorrowRecords(),
+            record -> record.getCollectionNo().equals(collectionNo)
         );
-    }
-
-    // 7. 图书评分功能
-    public String rateBook(String collectionNo, double score) {
-        if (score < 0 || score > 10) {
-            return "❌ 错误：评分必须在0-10之间！";
+        if (borrowRecord == null) {
+            // 图书未被借阅
+            return ""; // 归还失败
         }
-
-        Book book = libraryData.getBookByCollectionNo(collectionNo);
-        if (book == null) {
-            return "❌ 错误：馆藏编号「" + collectionNo + "」不存在！";
-        }
-
-        // 更新评分（计算平均评分）
-        Map<String, Double> ratings = libraryData.getBookRatings();
-        double currentScore = ratings.getOrDefault(book.getIsbn(), 0.0);
-        // 简单实现：取上次评分与新评分的平均值（实际应用可存储所有评分计算）
-        double newScore = (currentScore + score) / 2;
-        ratings.put(book.getIsbn(), newScore);
-
-        return String.format("✅ 评分成功成功！《%s》当前评分：%.1f", book.getTitle(), newScore);
-    }
-
-    // 8. 图书分类统计功能
-    public String statisticsBookByType() {
-        Map<BookType, Integer> stats = libraryData.getBookCountByType();
-        if (stats.isEmpty()) {
-            return "图书馆暂无图书数据";
-        }
-
-        StringBuilder sb = new StringBuilder("图书分类统计：\n");
-        stats.forEach((type, count) ->
-                sb.append(String.format("%s：%d本\n", type.getDesc(), count))
+        String userId = borrowRecord.getBorrowerId();
+        // 移除借阅记录
+        libraryData.getBorrowRecords().removeIf(
+            record -> record.getCollectionNo().equals(collectionNo)
         );
-        return sb.toString();
-    }
-
-    // 9. 图书排序功能
-    public String sortBooksByPublishDate() {
-        return sortBooks("出版日期", Comparator.comparing(Book::getPublishDate));
-    }
-
-    public String sortBooksByAuthor() {
-        return sortBooks("作者", Comparator.comparing(Book::getAuthor));
-    }
-
-    public String sortBooksByTitle() {
-        return sortBooks("书名", Comparator.comparing(Book::getTitle));
-    }
-
-    public String sortBooksByIsbn() {
-        return sortBooks("ISBN", Comparator.comparing(Book::getIsbn));
-    }
-
-    private String sortBooks(String sortType, Comparator<Book> comparator) {
-        List<Book> allBooks = new ArrayList<>();
-        libraryData.getBooksByIsbn().values().forEach(allBooks::addAll);
-
-
-        if (allBooks.isEmpty()) {
-            return "图书馆暂无图书";
+        // 检查是否有预约，如果有则自动借阅给预约者，按照预约顺序找到第一个预约者
+        List<Reservation> reservationsForBook = new ArrayList<>();
+        for (Reservation r : libraryData.getReservations()) {
+            if (r.getCollectionNo().equals(collectionNo)) {
+                reservationsForBook.add(r);
+            }
         }
-
-        // 使用工具类排序
-        List<Book> sortedBooks = new ArrayList<>(allBooks);
-        sortedBooks.sort(comparator);
-
-        return formatSearchResult("按" + sortType + "排序结果", sortedBooks);
+        String nextReservedUser = null;
+        if (!reservationsForBook.isEmpty()) {
+            Reservation firstReservation = reservationsForBook.getFirst();
+            nextReservedUser = firstReservation.getUserId();
+            // 自动借阅给第一个预约者
+            borrowBook(collectionNo, firstReservation.getUserId());
+            // 移除第一个预约记录
+            libraryData.getReservations().remove(firstReservation);
+        } else {
+            // 没有预约用户，图书变为可借阅状态
+            bookItem.setAvailable(true);
+        }
+        return nextReservedUser;
     }
-
-    // 工具方法：格式化搜索结果
-    private String formatSearchResult(String title, List<Book> books) {
-        if (books.isEmpty()) {
-            return "未找到相关图书";
+    // 预约图书
+    public boolean reserveBook(String collectionNo, String userId) {
+        // 检查用户是否存在
+        if (!isUserExists(userId)) {
+            return false;
         }
-
-        StringBuilder sb = new StringBuilder("----- " + title + "（共" + books.size() + "本）-----\n");
-        for (int i = 0; i < books.size(); i++) {
-            sb.append(i + 1).append(". ").append(books.get(i)).append("\n\n");
+        BookItem bookItem = libraryData.getBookItemsByCollectionNo().get(collectionNo);
+        // 检查图书是否存在
+        if (bookItem == null) {
+            return false;
         }
-        return sb.toString();
+        // 检查图书是否可借阅
+        if (bookItem.isAvailable()) {
+            return false; // 图书可借阅，不能预约
+        }
+        // 检查用户是否已经借阅了这本书
+        boolean isAlreadyBorrowed = false;
+        for (BorrowRecords record : libraryData.getBorrowRecords()) {
+            if (record.getCollectionNo().equals(collectionNo) 
+                && record.getBorrowerId().equals(userId)) {
+                isAlreadyBorrowed = true;
+                break;
+            }
+        }
+        if (isAlreadyBorrowed) {
+            return false; // 用户已经借阅了这本书，不能预约
+        }
+        // 检查用户是否已经预约了这本书
+        boolean isAlreadyReserved = false;
+        for (Reservation reservation : libraryData.getReservations()) {
+            if (reservation.getCollectionNo().equals(collectionNo) 
+                && reservation.getUserId().equals(userId)) {
+                isAlreadyReserved = true;
+                break;
+            }
+        }
+        if (isAlreadyReserved) {
+            return false; // 用户已经预约了这本书
+        }
+        // 添加预约记录
+        libraryData.getReservations().add(new Reservation(collectionNo, userId));
+        return true;
+    }
+    // 检查用户是否已经借阅了指定图书
+    public boolean isBookBorrowedByUser(String collectionNo, String userId) {
+        return CollectionUtils.findFirst(
+            libraryData.getBorrowRecords(),
+            record -> record.getCollectionNo().equals(collectionNo) 
+                && record.getBorrowerId().equals(userId)
+        ) != null;
+    }
+    // 检查用户是否已经预约了指定图书
+    public boolean isBookReservedByUser(String collectionNo, String userId) {
+        return CollectionUtils.findFirst(
+            libraryData.getReservations(),
+            reservation -> reservation.getCollectionNo().equals(collectionNo) 
+                && reservation.getUserId().equals(userId)
+        ) != null;
+    }
+    // 根据馆藏编号获取图书实体
+    public BookItem getBookItemByCollectionNo(String collectionNo) {
+        return libraryData.getBookItemsByCollectionNo().get(collectionNo);
+    }
+    // 获取用户在预约队列中的位置
+    public int getReservationPosition(String collectionNo, String userId) {
+        List<Reservation> reservationsForBook = (List<Reservation>) CollectionUtils.filter(
+            libraryData.getReservations(),
+            reservation -> reservation.getCollectionNo().equals(collectionNo)
+        );
+        for (int i = 0; i < reservationsForBook.size(); i++) {
+            if (reservationsForBook.get(i).getUserId().equals(userId)) {
+                return i + 1; // 位置从1开始
+            }
+        }
+        return -1; // 用户未预约此书
+    }
+    // 给图书评分
+    public void rateBook(String isbn, double rating) {
+        libraryData.getBookRatings().put(isbn, rating);
+    }
+    // 获取图书评分
+    public Double getBookRating(String isbn) {
+        return libraryData.getBookRatings().get(isbn);
+    }
+    // 获取所有图书
+    public List<Book> getAllBooks() {
+        List<Book> result = new ArrayList<>();
+        CollectionUtils.copy(libraryData.getBooksByIsbn().values(), result);
+        return result;
+    }
+    // 获取图书类型统计
+    public Map<BookType, Integer> getBookCountByType() {
+        return libraryData.getBookCountsByType();
+    }
+    // 按ISBN排序图书
+    public List<Book> sortBooksByIsbn() {
+        List<Book> books = new ArrayList<>(libraryData.getBooksByIsbn().values());
+        books.sort(Comparator.comparing(Book::getIsbn));
+        return books;
+    }
+    // 书名排序图书
+    public List<Book> sortBooksByTitle() {
+        List<Book> books = new ArrayList<>(libraryData.getBooksByIsbn().values());
+        books.sort(Comparator.comparing(Book::getTitle));
+        return books;
+    }
+    // 按作者排序图书
+    public List<Book> sortBooksByAuthor() {
+        List<Book> books = new ArrayList<>(libraryData.getBooksByIsbn().values());
+        books.sort(Comparator.comparing(Book::getAuthor));
+        return books;
+    }
+    // 按出版日期排序图书
+    public List<Book> sortBooksByPublishDate() {
+        List<Book> books = new ArrayList<>(libraryData.getBooksByIsbn().values());
+        books.sort(Comparator.comparing(Book::getPublishDate));
+        return books;
     }
 }

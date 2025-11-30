@@ -6,43 +6,30 @@ import java.util.Objects;
 
 public class Book {
     private String isbn;
-    private String collectionNo; // 馆藏编号
     private String title;
     private String author;
     private BookType type;
     private String publishDate;
-    private boolean isAvailable;
 
-    public Book(String isbn, String collectionNo, String title, String author, BookType type, String publishDate) {
+    public Book(String isbn, String title, String author, BookType type, String publishDate) {
         this.isbn = isbn;
-        this.collectionNo = collectionNo;
         this.title = title;
         this.author = author;
         this.type = type;
         this.publishDate = publishDate;
-        this.isAvailable = true;
     }
 
     public String getIsbn() {
         return isbn;
     }
-    public String getCollectionNo() {
-        return collectionNo;
-    }
     public String getTitle() {
         return title;
-    }
-    public BookType getType() {
-        return type;
     }
     public String getAuthor() {
         return author;
     }
-    public boolean isAvailable() {
-        return isAvailable;
-    }
-    public void setAvailable(boolean available) {
-        isAvailable = available;
+    public BookType getType() {
+        return type;
     }
     public String getPublishDate() {
         return publishDate;
@@ -54,18 +41,18 @@ public class Book {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Book book = (Book) o;
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Book book = (Book) obj;
         return Objects.equals(isbn, book.isbn);
     }
 
     @Override
     public String toString() {
         return String.format(
-                "ISBN: %s\n馆藏编号: %s\n书名: %s\n作者: %s\n类型: %s\n出版日期: %s\n状态: %s",
-                isbn, collectionNo, title, author, type, publishDate, isAvailable ? "可借阅" : "已借出"
+                "ISBN: %s\n书名: %s\n作者: %s\n类型: %s\n出版日期: %s",
+                isbn, title, author, type, publishDate
         );
     }
 }
