@@ -116,7 +116,6 @@ public class LibraryService {
             record -> record.getCollectionNo().equals(collectionNo) 
                 && record.getBorrowerId().equals(userId)
         );
-        
         if (borrowRecord != null) {
             // 用户已经借阅了这本书
             return false;
