@@ -267,7 +267,7 @@ public class LibraryService {
         books.sort(Comparator.comparing(Book::getIsbn));
         return books;
     }
-    // 书名排序图书
+    // 按书名排序图书
     public List<Book> sortBooksByTitle() {
         List<Book> books = new ArrayList<>(libraryData.getBooksByIsbn().values());
         books.sort(Comparator.comparing(Book::getTitle));
