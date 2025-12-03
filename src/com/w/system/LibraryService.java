@@ -80,7 +80,6 @@ public class LibraryService {
             book -> book.getTitle().contains(title)
         );
     }
-    
     // 根据作者查找图书
     public List<Book> findBooksByAuthor(String author) {
         return (List<Book>) CollectionUtils.filter(
